@@ -16,12 +16,12 @@ N_EDGES = 4
 
 TEST_SIZE = 0.2
 
-DATA_DIR = 'data/01_raw'
+DATA_DIR = 'data/01_raw/old_dmu'
 PROCESSED_DIR = 'data/02_processed'
 DATA_FNAME = 'wz4-wz6.npy'
-MODEL_DIR = 'models/energy'
-PLOT_DIR = 'plots/energy'
-RESULTS_DIR = 'results/energy'
+MODEL_DIR = 'models/old_dmu_energy'
+PLOT_DIR = 'plots/old_dmu_energy'
+RESULTS_DIR = 'results/old_dmu_energy'
 
 DATA_RANGES = [
     np.concatenate((np.arange(101, 132), np.arange(201, 256), np.arange(301, 337))), # WZ4
@@ -76,9 +76,9 @@ PARAM_DICTS = [
     }
 ]
 REGRESSORS = [
-    [ElasticNet(random_state=RANDOM_SEED, max_iter=100000) for __ in range(OUTPUT_SIZE)],
-    [LinearSVR(random_state=RANDOM_SEED, max_iter=100000, dual=True) for __ in range(OUTPUT_SIZE)],
-    [SVR(max_iter=1000000) for __ in range(OUTPUT_SIZE)],
+    # [ElasticNet(random_state=RANDOM_SEED, max_iter=100000) for __ in range(OUTPUT_SIZE)],
+    # [LinearSVR(random_state=RANDOM_SEED, max_iter=100000, dual=True) for __ in range(OUTPUT_SIZE)],
+    # [SVR(max_iter=1000000) for __ in range(OUTPUT_SIZE)],
     [xgb.XGBRegressor(objective='reg:squarederror') for __ in range(OUTPUT_SIZE)],
     [AdaBoostRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)],
     [GradientBoostingRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)],
