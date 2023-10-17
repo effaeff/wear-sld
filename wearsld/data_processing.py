@@ -28,7 +28,7 @@ from config import (
 import matplotlib.pyplot as plt
 from scipy import signal
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from plot_utils import modify_axis
 
@@ -42,6 +42,7 @@ class DataProcessing:
 
         self.scaler = MinMaxScaler()
         self.train, self.test = train_test_split(data, test_size=TEST_SIZE)
+        # self.scaler = StandardScaler()
 
         self.train[:, :INPUT_SIZE] = self.scaler.fit_transform(self.train[:, :INPUT_SIZE])
         self.test[:, :INPUT_SIZE] = self.scaler.transform(self.test[:, :INPUT_SIZE])
