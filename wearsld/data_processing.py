@@ -23,25 +23,29 @@ from config import (
     DATA_DIR,
     DATA_RANGES,
     FZ,
-    N_EDGES
+    N_EDGES,
+    SENSOR,
+    TARGET,
+    MACHINE_TOOL
 )
 import matplotlib.pyplot as plt
 from scipy import signal
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from plot_utils import modify_axis
 
 class DataProcessing:
     def __init__(self):
         # data = np.load(f'{PROCESSED_DIR}/{DATA_FNAME}')
-        self.load_energy()
-        quit()
+        self.data = self.load_energy(TARGET)
+        # self.data = self.load_stability()
         # self.process()
-        data = self.load_processed() # spsp, ae, wear, energy
+        # data = self.load_processed() # spsp, ae, wear, energy
 
         self.scaler = MinMaxScaler()
-        self.train, self.test = train_test_split(data, test_size=TEST_SIZE)
+        # self.scaler = StandardScaler()
+        self.train, self.test = train_test_split(self.data, test_size=TEST_SIZE)
 
         self.train[:, :INPUT_SIZE] = self.scaler.fit_transform(self.train[:, :INPUT_SIZE])
         self.test[:, :INPUT_SIZE] = self.scaler.transform(self.test[:, :INPUT_SIZE])
@@ -50,6 +54,10 @@ class DataProcessing:
 
     def get_train_test(self):
         return self.train, self.test
+
+    def get_data(self, target):
+        return self.load_energy(target)
+        # return self.load_stability()
 
     def get_scaler(self):
         return self.scaler
@@ -79,21 +87,39 @@ class DataProcessing:
             lim = ae0 + alpha * (ae1 - ae0)
         return lim
 
-    def load_energy(self):
-        with h5py.File(f'{DATA_DIR}/altedmu_energy_2.hdf5', 'r') as fhandle:
+    def load_stability(self):
+        with h5py.File(f'{DATA_DIR}/neuedmu_stability.hdf5', 'r') as fhandle:
+            results = np.concatenate([
+                fhandle[f'{tool}/stability_{SENSOR}'][()] for tool in fhandle
+            ])
+            return results
+
+    def load_energy(self, target):
+        fname = 'altedmu_energy_22' if MACHINE_TOOL=='old_dmu' else 'neuedmu_energy_22'
+        with h5py.File(f'{DATA_DIR}/{fname}.hdf5', 'r') as fhandle:
             results = []
             for tool in fhandle:
                 exps = fhandle[tool]
-                for exp in tqdm(exps):
-                    data = fhandle[f'{tool}/{exp}/energy_acc'][()]
+                for exp in exps:
+                    data = fhandle[f'{tool}/{exp}/energy_{SENSOR}'][()]
+                    wear = fhandle[f'{tool}/{exp}/wear'][:, 1]
                     energy = data[:, 1]
                     aes = data[:, 0]
                     spsp = fhandle[f'{tool}/{exp}'].attrs['spsp']
-                    wear = fhandle[f'{tool}/{exp}'].attrs['wear']
+                    # wear = fhandle[f'{tool}/{exp}'].attrs['wear']
+                    ae_max = fhandle[f'{tool}/{exp}'].attrs['ae_max']
 
-                    for idx, ae in enumerate(aes):
-                        results.append([spsp, ae, wear, energy[idx]])
+                    lim = fhandle[f'{tool}/{exp}/energy_{SENSOR}'].attrs['ae_lim']
+                    # if lim==-1: lim = ae_max
+
+                    if target=='energy':
+                        for idx, ae in enumerate(aes):
+                            results.append([spsp, ae, wear[idx], energy[idx]])
+                    elif target=='limit':
+                        results.append([spsp, wear, lim])
             results = np.array(results)
+            if target=='limit':
+                results = results[np.where(results[:, -1]!=-1)]
             # np.save(f'{RESULTS_DIR}/energy_acc.npy', results)
 
             # hist(results[:, -1], nb_bins=200)
@@ -116,13 +142,12 @@ class DataProcessing:
             # plt.show()
             return results
 
-
     def read_hdf(self):
         with h5py.File(f'{DATA_DIR}/altedmu.hdf5', 'r') as fhandle:
             results = []
             for tool in fhandle:
                 exps = fhandle[tool]
-                for exp in tqdm(exps):
+                for exp in exps:
                     data = fhandle[f'{tool}/{exp}/audio'][()]
                     fs = fhandle[f'{tool}/{exp}/audio'].attrs['sampling_rate']
                     spsp = fhandle[f'{tool}/{exp}'].attrs['spsp']
