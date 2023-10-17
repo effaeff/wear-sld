@@ -1,27 +1,33 @@
-from sklearn.linear_model import ElasticNet
 from sklearn.ensemble import (
     GradientBoostingRegressor,
     RandomForestRegressor,
     AdaBoostRegressor
 )
-from sklearn.svm import LinearSVR, SVR
 import xgboost as xgb
 from scipy.stats import uniform, randint
 import numpy as np
 
-INPUT_SIZE = 3
+# TARGET = 'limit'
+TARGET = 'energy'
+SENSOR = 'audio'
+# SENSOR = 'acc'
+
+INPUT_SIZE = 3 if TARGET=='energy' else 2
 OUTPUT_SIZE = 1
 FZ = 0.08
 N_EDGES = 4
 
 TEST_SIZE = 0.2
 
-DATA_DIR = 'data/01_raw/old_dmu'
+# MACHINE_TOOL = 'old'
+MACHINE_TOOL = 'new'
+DATA_DIR = f'data/01_raw/{MACHINE_TOOL}_dmu'
 PROCESSED_DIR = 'data/02_processed'
-DATA_FNAME = 'wz4-wz6.npy'
-MODEL_DIR = 'models/old_dmu_energy'
-PLOT_DIR = 'plots/old_dmu_energy'
-RESULTS_DIR = 'results/old_dmu_energy'
+
+MODEL_DIR = f'models/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}'
+PLOT_DIR = f'plots/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}'
+RESULTS_DIR = f'results/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}'
+
 
 DATA_RANGES = [
     np.concatenate((np.arange(101, 132), np.arange(201, 256), np.arange(301, 337))), # WZ4
@@ -32,20 +38,13 @@ DATA_RANGES = [
 RANDOM_SEED = 1234
 
 CV_FOLDS = 20
-N_ITER_SEARCH = 500
+N_ITER_SEARCH = 300
 
 LINEWIDTH = 1
 FONTSIZE = 14
 TARGET_LBLS = ['ae_limit']
 
 PARAM_DICTS = [
-    {'alpha': uniform(), 'l1_ratio': uniform()},
-    {'C': randint(1, 100)},
-    {
-        'C': randint(1, 100),
-        'epsilon': uniform(0.001, 1),
-        'kernel': ['rbf', 'poly', 'sigmoid']
-    },
     {
         'learning_rate': uniform(0.0001, 0.1),
         'max_depth': randint(2, 32),
@@ -76,9 +75,6 @@ PARAM_DICTS = [
     }
 ]
 REGRESSORS = [
-    # [ElasticNet(random_state=RANDOM_SEED, max_iter=100000) for __ in range(OUTPUT_SIZE)],
-    # [LinearSVR(random_state=RANDOM_SEED, max_iter=100000, dual=True) for __ in range(OUTPUT_SIZE)],
-    # [SVR(max_iter=1000000) for __ in range(OUTPUT_SIZE)],
     [xgb.XGBRegressor(objective='reg:squarederror') for __ in range(OUTPUT_SIZE)],
     [AdaBoostRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)],
     [GradientBoostingRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)],
