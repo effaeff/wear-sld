@@ -16,12 +16,13 @@ N_EDGES = 4
 
 TEST_SIZE = 0.2
 
-DATA_DIR = 'data/01_raw/old_dmu'
+# DATA_DIR = 'data/01_raw/old_dmu'
+DATA_DIR = 'data/01_raw/new_dmu'
 PROCESSED_DIR = 'data/02_processed'
 DATA_FNAME = 'wz4-wz6.npy'
-MODEL_DIR = 'models/old_dmu_energy'
-PLOT_DIR = 'plots/old_dmu_energy'
-RESULTS_DIR = 'results/old_dmu_energy'
+MODEL_DIR = 'models/new_dmu_energy'
+PLOT_DIR = 'plots/new_dmu_energy'
+RESULTS_DIR = 'results/new_dmu_energy'
 
 DATA_RANGES = [
     np.concatenate((np.arange(101, 132), np.arange(201, 256), np.arange(301, 337))), # WZ4
@@ -31,21 +32,21 @@ DATA_RANGES = [
 
 RANDOM_SEED = 1234
 
-CV_FOLDS = 20
-N_ITER_SEARCH = 500
+CV_FOLDS = 10
+N_ITER_SEARCH = 100
 
 LINEWIDTH = 1
 FONTSIZE = 14
 TARGET_LBLS = ['ae_limit']
 
 PARAM_DICTS = [
-    {'alpha': uniform(), 'l1_ratio': uniform()},
-    {'C': randint(1, 100)},
-    {
-        'C': randint(1, 100),
-        'epsilon': uniform(0.001, 1),
-        'kernel': ['rbf', 'poly', 'sigmoid']
-    },
+    #{'alpha': uniform(), 'l1_ratio': uniform()},
+    #{'C': randint(1, 100)},
+    #{
+    #    'C': randint(1, 100),
+    #    'epsilon': uniform(0.001, 1),
+    #    'kernel': ['rbf', 'poly', 'sigmoid']
+    #},
     {
         'learning_rate': uniform(0.0001, 0.1),
         'max_depth': randint(2, 32),
