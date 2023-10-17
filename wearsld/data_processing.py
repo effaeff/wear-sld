@@ -15,7 +15,6 @@ from tqdm import tqdm
 
 from config import (
     PROCESSED_DIR,
-    DATA_FNAME,
     TEST_SIZE,
     RANDOM_SEED,
     INPUT_SIZE,
