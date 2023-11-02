@@ -38,9 +38,11 @@ class DataProcessing:
     def __init__(self):
         # data = np.load(f'{PROCESSED_DIR}/{DATA_FNAME}')
         self.data = self.load_energy(TARGET)
+        print(self.data.shape)
         # self.data = self.load_stability()
-        # self.process()
-        # data = self.load_processed() # spsp, ae, wear, energy
+        # self.process_hdf()
+        # quit()
+        self.data = self.load_processed() # spsp, ae, wear, energy
 
         self.scaler = MinMaxScaler()
         # self.scaler = StandardScaler()
@@ -62,12 +64,19 @@ class DataProcessing:
         return self.scaler
 
     def load_processed(self):
-        folders = sorted(
-            [fname for fname in os.listdir(DATA_DIR) if os.path.isdir(f'{DATA_DIR}/{fname}')],
-            key=lambda x: int(re.search('\d+', x).group())
-        )
-        results = np.concatenate([np.load(f'{RESULTS_DIR}/{folder}.npy') for folder in folders])
-        results = results[np.where(results[:, -1] < 0.00001)]
+        # folders = sorted(
+            # [fname for fname in os.listdir(DATA_DIR) if os.path.isdir(f'{DATA_DIR}/{fname}')],
+            # key=lambda x: int(re.search('\d+', x).group())
+        # )
+        # results = np.concatenate([np.load(f'{RESULTS_DIR}/{folder}.npy') for folder in folders])
+        # results = results[np.where(results[:, -1] < 0.00001)]
+        results = np.load(f'{PROCESSED_DIR}/energy_wave_corrected.npy') # spsp, ae, wear, energy
+        scaler = MinMaxScaler()
+        results = results[np.where(results[:, 1] <= 4)]
+        results[:, -1] = scaler.fit_transform(results[:, -1].reshape((-1, 1))).flatten()
+        # results = results[np.where(results[:, 3] <= 0.4)]
+        # print(results.shape)
+        # hist(results[:, 3])
         # plt.scatter(results[:, 0], results[:, 1], c=results[:, -1])
         # plt.show()
         # quit()
@@ -94,7 +103,7 @@ class DataProcessing:
             return results
 
     def load_energy(self, target):
-        fname = 'altedmu_energy_22' if MACHINE_TOOL=='old_dmu' else 'neuedmu_energy_22'
+        fname = 'altedmu_energy_22' if MACHINE_TOOL=='old' else 'neuedmu_energy_22'
         with h5py.File(f'{DATA_DIR}/{fname}.hdf5', 'r') as fhandle:
             results = []
             for tool in fhandle:
@@ -102,6 +111,7 @@ class DataProcessing:
                 for exp in exps:
                     data = fhandle[f'{tool}/{exp}/energy_{SENSOR}'][()]
                     wear = fhandle[f'{tool}/{exp}/wear'][:, 1]
+                    start_wear = fhandle[f'{tool}/{exp}'].attrs['wear']
                     energy = data[:, 1]
                     aes = data[:, 0]
                     spsp = fhandle[f'{tool}/{exp}'].attrs['spsp']
@@ -115,7 +125,7 @@ class DataProcessing:
                         for idx, ae in enumerate(aes):
                             results.append([spsp, ae, wear[idx], energy[idx]])
                     elif target=='limit':
-                        results.append([spsp, wear, lim])
+                        results.append([spsp, start_wear, lim])
             results = np.array(results)
             if target=='limit':
                 results = results[np.where(results[:, -1]!=-1)]
@@ -141,115 +151,247 @@ class DataProcessing:
             # plt.show()
             return results
 
-    def read_hdf(self):
-        with h5py.File(f'{DATA_DIR}/altedmu.hdf5', 'r') as fhandle:
-            results = []
+    def process_hdf(self):
+        results = []
+        # with h5py.File(f'{DATA_DIR}/altedmu.hdf5', 'r') as fhandle:
+        results = np.load(f'{PROCESSED_DIR}/energy_wave.npy')
+        with h5py.File(f'{DATA_DIR}/altedmu_audio_filtered.hdf5', 'r') as fhandle:
+            res_i = 0
             for tool in fhandle:
+                # tool = 'WZ9'
                 exps = fhandle[tool]
-                for exp in exps:
-                    data = fhandle[f'{tool}/{exp}/audio'][()]
-                    fs = fhandle[f'{tool}/{exp}/audio'].attrs['sampling_rate']
+                for exp in tqdm(exps):
+                    energy_file = h5py.File(f'{DATA_DIR}/altedmu_energy_22.hdf5', 'r')
+
+                    data = fhandle[f'{tool}/{exp}/audio_filtered'][()]
+                    fs = fhandle[f'{tool}/{exp}/audio_filtered'].attrs['sampling_rate']
+                    # data = fhandle[f'{tool}/{exp}/audio'][()]
+                    # fs = fhandle[f'{tool}/{exp}/audio'].attrs['sampling_rate']
                     spsp = fhandle[f'{tool}/{exp}'].attrs['spsp']
-                    wear = fhandle[f'{tool}/{exp}'].attrs['wear']
-                    istart = fhandle[f'{tool}/{exp}'].attrs['i_rampe_start']
-                    iend = fhandle[f'{tool}/{exp}'].attrs['i_rampe_end']
+                    # wear = fhandle[f'{tool}/{exp}'].attrs['wear']
+                    wear_start = energy_file[f'{tool}/{exp}'].attrs['wear']
+                    wear_end = energy_file[f'{tool}/{exp}'].attrs['wear_end']
+                    # istart = fhandle[f'{tool}/{exp}'].attrs['i_rampe_start']
+                    # iend = fhandle[f'{tool}/{exp}'].attrs['i_rampe_end']
                     vf = fhandle[f'{tool}/{exp}'].attrs['vf']
-                    ae = fhandle[f'{tool}/{exp}'].attrs['ae_max']
+                    ae = fhandle[f'{tool}/{exp}'].attrs['ae_valid_max']
+                    # ae = fhandle[f'{tool}/{exp}'].attrs['ae_max']
+
+                    nperseg = int(fs * 0.01)
+
+                    ##############################
+                    ### Correct ae calculation ###
+                    ##############################
+                    # res = results[res_i]
+                    # if res[2] != wear_start:
+                        # print(f'res wear: {res[2]}, data wear: {wear_start}')
+                        # quit()
+
+                    # cutoff = (len(data) // (nperseg+nperseg//2)) * (nperseg+nperseg//2)
+                    # data = data[:cutoff]
+                    # window = np.hamming(nperseg)
+                    # data_downsampled = []
+                    # for w_start in range(0, len(data)-nperseg, nperseg//2):
+                        # data_downsampled.append(np.mean(
+                            # data[w_start:w_start + nperseg] * window
+                        # ))
+
+                    # aes_wave = np.linspace(0, ae, len(data_downsampled))
+                    # # print(len(data_downsampled))
+
+                    # for ae_i, ae in enumerate(aes_wave):
+                        # results[res_i + ae_i, 1] = ae
+
+                    # res_i += len(data_downsampled)
+                    # continue
+                    ##############################
 
                     dt = 1 / fs
 
-                    valid_portion = lambda ae: (
-                        (6 * ae + 1225) - np.sqrt(-ae * (1189*ae - 14700))
-                    ) / (ae**2 + 1225)
-                    i_valid_end = istart + int(valid_portion(ae) * (iend - istart))
+                    data = (data - np.mean(data)) / np.std(data)
 
-                    data = data[istart:i_valid_end]
+                    # valid_portion = lambda ae: (
+                        # (6 * ae + 1225) - np.sqrt(-ae * (1189*ae - 14700))
+                    # ) / (ae**2 + 1225)
+                    # i_valid_end = istart + int(valid_portion(ae) * (iend - istart))
+
+                    # data = data[istart:i_valid_end]
 
                     time = np.array([1 / fs * idx for idx, __ in enumerate(data)])
 
-                    # print(f'spsp: {spsp}\twear: {wear}')
 
-                    # wavelet = 'cgau2'
-                    freqs = np.arange(100, 8000, 16)
-                    # central_freq = pywt.central_frequency(wavelet)
-                    # scale = pywt.frequency2scale(wavelet, freqs / fs)
-                    # # scale = [central_freq / (dt * value) for value in freqs]
-                    # cwtmatr, __ = pywt.cwt(data, scale, wavelet, sampling_period=dt)
+                    # Use wavelets for high frequency resolution
+                    wavelet = 'morl' # Known to be beneficial for audio data
+                    freqs = np.arange(1000, 6000, 1)
+                    # fz_freq = spsp / 60.0 * N_EDGES
+                    scale = pywt.frequency2scale(wavelet, freqs / fs)
+                    cwtmatr, __ = pywt.cwt(data, scale, wavelet, sampling_period=dt)
                     # power = np.power(np.abs(cwtmatr), 2)
+                    power = np.abs(cwtmatr) # Only use abs for now to avoid high fluctuations
+
+                    # Scale-dependent normalization of power
+                    scale_avg = np.repeat(scale, len(data)).reshape(power.shape)
+                    power = power / scale_avg
+
+                    # Downsampling in time direction using hamming window with 50% overlap
+                    window = np.hamming(nperseg)
+                    power_downsampled = []
+                    cutoff = (power.shape[1] // (nperseg+nperseg//2)) * (nperseg+nperseg//2)
+                    power = power[:, :cutoff]
+                    for w_start in range(0, power.shape[1]-nperseg, nperseg//2):
+                        power_downsampled.append(np.mean(
+                            np.einsum(
+                                'ij, j -> ij',
+                                power[:, w_start:w_start + nperseg],
+                                window
+                            ),
+                            axis=1
+                        ))
+                    power_downsampled = np.array(power_downsampled).T
+                    time_wave = np.linspace(0, time[-1], power_downsampled.shape[1])
+                    # aes = np.linspace(0, ae * valid_portion(ae), len(time))
+                    aes = np.linspace(0, ae, len(time))
+
+                    # Only sum over frequencies in the three dominant peaks in the FRF
+                    freq_cond = np.where(
+                        ((freqs > 1950) & (freqs < 2150)) |
+                        ((freqs > 2400) & (freqs < 3299)) |
+                        ((freqs > 3550) & (freqs < 4200))
+                    )
+
+                    energy = np.sum(power_downsampled, axis=0)
+                    energy_filtered = np.sum(power_downsampled[freq_cond], axis=0)
+
+                    energy = signal.savgol_filter(energy, len(energy)//10, 3)
+                    energy_filtered = signal.savgol_filter(energy_filtered, len(energy)//10, 3)
+
+                    aes_wave = np.linspace(0, ae, len(energy))
+                    wear_wave = np.linspace(wear_start, wear_end, len(energy))
+                    # aes_wave = np.linspace(0, ae * valid_portion(ae), len(energy))
+                    for e_idx, __ in enumerate(energy_filtered):
+                        results.append([spsp, aes_wave[e_idx], wear_wave[e_idx], energy_filtered[e_idx]])
+
+                ########################################################
+                ### The following is debugging and spectrogram stuff ###
+                ########################################################
+
+                    # wave_fig, wave_axs = plt.subplots(3, 1, sharex=True)
+                    # wave_axs[0].plot(aes, data)
+                    # wave_axs[1].plot(aes_wave, energy)
+                    # wave_axs[1].plot(aes_wave, energy_filtered)
+                    # cmap = wave_axs[2].pcolormesh(
+                        # aes_wave,
+                        # freqs,
+                        # power_downsampled
+                    # )#, extend='both', cmap='inferno')
+                    # plt.show()
+                    # quit()
+
+                    # for t_idx, time_slice in enumerate(time):
+                        # __, slice_ax = plt.subplots(1, 1)
+                        # slice_ax.plot(freqs, power[:, t_idx])
+                        # for fz_harmonic in [fz_freq * idx for idx in range(1, int(freqs[-1]//fz_freq))]:
+                            # slice_ax.axvline(fz_harmonic, 0, 1, c='r')
+                        # plt.show()
+                        # plt.close()
+
+                    # print(power_downsampled.shape)
+                    # print(power.shape)
+                    # print(data.shape)
+                    # print(freqs.shape)
+                    # print(len(energy))
 
                     # nperseg = 1024
-                    nperseg = int(fs * 0.01)
-                    window = np.hamming(nperseg)
-                    freqs_spec, time_spec, sxx = signal.spectrogram(
-                        data,
-                        fs,
-                        detrend=False,
-                        window=window,
-                        scaling='spectrum',
+                    # freqs_spec, time_spec, sxx = signal.spectrogram(
+                        # data,
+                        # fs,
+                        # detrend=False,
+                        # window=window,
+                        # scaling='spectrum',
                         # mode='magnitude',
-                        nperseg=nperseg,
-                        noverlap=0
-                    )
+                        # nperseg=nperseg,
+                        # noverlap=nperseg//2
+                    # )
+                    # freq_slice = np.where((freqs_spec >= freqs[0]) & (freqs_spec <= freqs[-1]))
+
                     # print(sxx.shape)
+                    # print(time_spec.shape)
+                    # print(freqs_spec.shape)
+                    # for s_idx, slice in enumerate(time_spec):
+                        # f_slice = freqs_spec[freq_slice]
+                        # amp_slice = sxx[freq_slice, s_idx][0]
+                        # print(f_slice.shape)
 
-                    freq_slice = np.where((freqs_spec >= freqs[0]) & (freqs_spec <= freqs[-1]))
+                        # peaks = signal.find_peaks(amp_slice)[0]
 
-                    fontsize = 10
-                    fig, axs = plt.subplots(4, 1, sharex=True)
-                    fig.suptitle(f'{tool} {exp}')
+                        # plt.plot(f_slice, amp_slice)
+                        # plt.scatter(f_slice[peaks], amp_slice[peaks], c='g')
 
-                    axs[0].plot(np.linspace(0, ae * valid_portion(ae), len(data)), data)
-                    # cmap = axs[1].pcolormesh(time, freqs, power)#, extend='both', cmap='inferno')
-                    # cmap = axs[1].imshow(cwtmatr, extent=[0, len(cwtmatr[0]), scale[0], scale[-1]])
+                        # for fz_harmonic in [fz_freq * idx for idx in range(1, int(freqs[-1]//fz_freq))]:
+                            # plt.axvline(fz_harmonic, 0, 1, c='r')
 
-                    energy = np.sum(sxx, axis=0)
-                    aes = np.linspace(0, ae * valid_portion(ae), len(energy))
+                        # plt.show()
+                        # plt.close()
 
-                    axs[1].plot(aes, energy)
-                    axs[1].axhline(np.std(energy), 0, 1, c='b')
-                    energy_lim = self.calc_limit(energy, aes)
-                    axs[1].axvline(energy_lim, 0, 1, c='r')
+                    # fontsize = 10
+                    # fig, axs = plt.subplots(4, 1, sharex=True)
+                    # fig.suptitle(f'{tool} {exp}')
 
-                    slope = [z - x for x, z in zip(energy[:-1], energy[1:])]
-                    slope_lim = self.calc_limit(slope, aes)
-                    axs[2].plot(aes[1:], slope)
-                    axs[2].axhline(np.std(slope), 0, 1, c='b')
-                    axs[2].axvline(slope_lim, 0, 1, c='r')
+                    # axs[0].plot(np.linspace(0, ae, len(data)), data)
+                    # # cmap = axs[1].pcolormesh(time, freqs, power)#, extend='both', cmap='inferno')
+                    # # cmap = axs[1].imshow(cwtmatr, extent=[0, len(cwtmatr[0]), scale[0], scale[-1]])
 
-                    ae_lim = slope_lim if slope_lim > energy_lim else energy_lim
+                    # energy = np.sum(sxx, axis=0)
+                    # aes = np.linspace(0, ae, len(energy))
 
-                    cmap = axs[3].pcolormesh(aes, freqs_spec[freq_slice], sxx[freq_slice, :][0])
+                    # axs[1].plot(aes, energy)
+                    # axs[1].axhline(np.std(energy), 0, 1, c='b')
+                    # energy_lim = self.calc_limit(energy, aes)
+                    # axs[1].axvline(energy_lim, 0, 1, c='r')
 
-                    axs[0].set_ylabel("Audio", fontsize=fontsize)
-                    axs[1].set_ylabel("Energy", fontsize=fontsize)
-                    axs[2].set_ylabel("Energy slope", fontsize=fontsize)
-                    axs[3].set_ylabel("Frequency", fontsize=fontsize)
-                    # axs[2].set_xlabel("Width of cut", fontsize=fontsize)
+                    # slope = [z - x for x, z in zip(energy[:-1], energy[1:])]
+                    # slope_lim = self.calc_limit(slope, aes)
+                    # axs[2].plot(aes[1:], slope)
+                    # axs[2].axhline(np.std(slope), 0, 1, c='b')
+                    # axs[2].axvline(slope_lim, 0, 1, c='r')
 
-                    left, bottom, width, height = axs[2].get_position().bounds
-                    cax = fig.add_axes([left, 0.03, width, height * 0.1])
-                    plt.colorbar(cmap, orientation='horizontal', cax=cax)
+                    # ae_lim = slope_lim if slope_lim > energy_lim else energy_lim
 
-                    fig.canvas.draw()
-                    axs[0] = modify_axis(axs[0], '', '', -2, 2, fontsize)
-                    axs[1] = modify_axis(axs[1], '', '', -2, 2, fontsize)
-                    axs[2] = modify_axis(axs[1], '', '', -2, 2, fontsize, grid=False)
-                    plt.setp(axs[0].get_xticklabels(), visible=False)
-                    plt.setp(axs[1].get_xticklabels(), visible=False)
+                    # cmap = axs[3].pcolormesh(aes, freqs_spec[freq_slice], sxx[freq_slice, :][0])
 
-                    fig.align_ylabels()
+                    # axs[0].set_ylabel("Audio", fontsize=fontsize)
+                    # axs[1].set_ylabel("Energy", fontsize=fontsize)
+                    # axs[2].set_ylabel("Energy slope", fontsize=fontsize)
+                    # axs[3].set_ylabel("Frequency", fontsize=fontsize)
+                    # # axs[2].set_xlabel("Width of cut", fontsize=fontsize)
 
-                    plt.show()
-                    plt.close()
-                    results.append([spsp, wear, ae_lim])
+                    # left, bottom, width, height = axs[2].get_position().bounds
+                    # cax = fig.add_axes([left, 0.03, width, height * 0.1])
+                    # plt.colorbar(cmap, orientation='horizontal', cax=cax)
 
-        __, res_ax = plt.subplots(1, 1)
-        results = np.array(results)
-        res_ax.scatter(results[:, 0], results[:, 2], c=results[:, 1])
-        plt.show()
-        plt.close()
+                    # fig.canvas.draw()
+                    # axs[0] = modify_axis(axs[0], '', '', -2, 2, fontsize)
+                    # axs[1] = modify_axis(axs[1], '', '', -2, 2, fontsize)
+                    # axs[2] = modify_axis(axs[1], '', '', -2, 2, fontsize, grid=False)
+                    # plt.setp(axs[0].get_xticklabels(), visible=False)
+                    # plt.setp(axs[1].get_xticklabels(), visible=False)
 
-    def process(self):
+                    # fig.align_ylabels()
+
+                    # plt.show()
+                    # plt.close()
+                    # results.append([spsp, wear, ae_lim])
+
+                ########################################################
+
+        # __, res_ax = plt.subplots(1, 1)
+        # results = np.array(results)
+        # res_ax.scatter(results[:, 0], results[:, 2], c=results[:, 1])
+        # plt.show()
+        # plt.close()
+        np.save(f'{PROCESSED_DIR}/energy_wave_corrected.npy', results)
+
+    def process_raw(self):
         np.set_printoptions(suppress=True)
         folders = sorted(
             [fname for fname in os.listdir(DATA_DIR) if os.path.isdir(f'{DATA_DIR}/{fname}')],

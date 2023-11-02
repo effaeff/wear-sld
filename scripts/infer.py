@@ -85,10 +85,11 @@ def infer_energy():
 
     hyperopts = load_estimators(MODEL_DIR)
     for hyper_idx, hyperopt in enumerate(hyperopts):
-        test_wears = [2500 * idx for idx in range(0, 11)]
+        # test_wears = [17500 * idx for idx in range(0, 11)]
         spsp = np.arange(4000, 8001, 1)
         ae = np.arange(0, 6.1, 0.1)
-        for test_wear in test_wears:
+        # for test_wear in test_wears:
+        for test_wear in range(0, 175000, 1000):
             fig, axs = plt.subplots(1, 1, figsize=(6, 6))
             fig.suptitle(f'{hyperopt[0].best_estimator_.__class__.__name__} Wear: {test_wear}')
 
@@ -159,7 +160,10 @@ def infer_energy():
             plt.tight_layout()
 
             # plt.show()
-            plt.savefig(f'{PLOT_DIR}/{hyperopt[0].best_estimator_.__class__.__name__}_{test_wear}.png', dpi=600)
+            plt.savefig(
+                f'{PLOT_DIR}/{hyperopt[0].best_estimator_.__class__.__name__}_{test_wear:06d}.png',
+                dpi=600
+            )
             plt.close()
 
 if __name__ == '__main__':

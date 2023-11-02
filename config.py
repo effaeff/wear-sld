@@ -19,8 +19,8 @@ N_EDGES = 4
 
 TEST_SIZE = 0.2
 
-# MACHINE_TOOL = 'old'
-MACHINE_TOOL = 'new'
+MACHINE_TOOL = 'old'
+# MACHINE_TOOL = 'new'
 DATA_DIR = f'data/01_raw/{MACHINE_TOOL}_dmu'
 PROCESSED_DIR = 'data/02_processed'
 
@@ -74,8 +74,8 @@ PARAM_DICTS = [
     }
 ]
 REGRESSORS = [
-    [xgb.XGBRegressor(objective='reg:squarederror') for __ in range(OUTPUT_SIZE)],
-    [AdaBoostRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)],
-    [GradientBoostingRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)],
-    [RandomForestRegressor(random_state=RANDOM_SEED, n_jobs=-1) for __ in range(OUTPUT_SIZE)]
+    # [xgb.XGBRegressor(objective='reg:squarederror') for __ in range(OUTPUT_SIZE)],
+    # [AdaBoostRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)],
+    [GradientBoostingRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)]
+    # [RandomForestRegressor(random_state=RANDOM_SEED, n_jobs=-1) for __ in range(OUTPUT_SIZE)]
 ]
