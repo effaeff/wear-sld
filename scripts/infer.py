@@ -9,7 +9,7 @@ import itertools
 from wearsld.data_processing import DataProcessing
 from wearsld.utils import load_estimators
 
-from config import MODEL_DIR, PLOT_DIR, FONTSIZE, TARGET
+from config import MODEL_DIR, PLOT_DIR, FONTSIZE, TARGET, MACHINE_TOOL
 import misc
 from plot_utils import hist
 
@@ -18,7 +18,7 @@ def infer_stability():
     processing = DataProcessing()
     scaler = processing.get_scaler()
 
-    data = processing.get_data(TARGET)
+    data = processing.get_data(TARGET, 'new')
 
     hyperopts = load_estimators(MODEL_DIR)
     for hyper_idx, hyperopt in enumerate(hyperopts):
@@ -32,6 +32,7 @@ def infer_stability():
         test_data = scaler.transform(test_data)
         pred_0 = hyperopt[0].predict(test_data)
 
+        # test_wears = [17500 * idx for idx in range(0, 11)]
         test_wears = [2500 * idx for idx in range(0, 11)]
 
         for test_wear in test_wears:
@@ -61,7 +62,7 @@ def infer_stability():
         axs.set_xlabel('Spindle speed', fontsize=FONTSIZE)
         axs.set_xticks(np.arange(4000, 8001, 1000))
         # axs.set_yticks(np.arange(0, 3.6, 0.5))
-        axs.set_yticks(np.arange(0, 6, 1))
+        axs.set_yticks(np.arange(0, 7, 1))
 
         fig.canvas.draw()
 
@@ -69,7 +70,7 @@ def infer_stability():
 
         axs.set_xlim(4000, 8000)
         # axs.set_ylim(0, 3.5)
-        axs.set_ylim(0, 5)
+        axs.set_ylim(0, 6)
         plt.tight_layout()
 
         # plt.show()
@@ -81,7 +82,7 @@ def infer_energy():
     processing = DataProcessing()
     scaler = processing.get_scaler()
     np.set_printoptions(suppress=True)
-    data = processing.get_data('limit')
+    data = processing.get_data('limit', 'new')
 
     hyperopts = load_estimators(MODEL_DIR)
     for hyper_idx, hyperopt in enumerate(hyperopts):
@@ -89,7 +90,8 @@ def infer_energy():
         spsp = np.arange(4000, 8001, 1)
         ae = np.arange(0, 6.1, 0.1)
         # for test_wear in test_wears:
-        for test_wear in range(0, 175000, 1000):
+        # for test_wear in range(0, 175000, 1000):
+        for test_wear in range(0, 25000, 100):
             fig, axs = plt.subplots(1, 1, figsize=(6, 6))
             fig.suptitle(f'{hyperopt[0].best_estimator_.__class__.__name__} Wear: {test_wear}')
 
@@ -105,10 +107,10 @@ def infer_energy():
 
 
             pred = pred.reshape((len(spsp), len(ae)))
-            ae_limits = np.zeros_like(spsp)
-            for i_row, row in enumerate(pred):
+            # ae_limits = np.zeros_like(spsp)
+            # for i_row, row in enumerate(pred):
 
-                limit = 10
+                # limit = 10
 
                 # energy = np.zeros_like(row)
                 # for i in range(1, len(energy)):
@@ -118,14 +120,14 @@ def infer_energy():
                         # energy[i] += (row[j] - j * slope)**2
                     # energy[i] /= i
 
-                try:
-                    # i_lim = np.where(energy > limit)[0][0]
-                    i_lim = np.where(row > limit)[0][0]
-                    ae_lim = ae[i_lim]
-                except:
-                    ae_lim = ae[-1]
+                # try:
+                    # # i_lim = np.where(energy > limit)[0][0]
+                    # i_lim = np.where(row > limit)[0][0]
+                    # ae_lim = ae[i_lim]
+                # except:
+                    # ae_lim = ae[-1]
 
-                ae_limits[i_row] = ae_lim
+                # ae_limits[i_row] = ae_lim
 
                 # __, energy_ax = plt.subplots(1, 1)
                 # energy_ax.plot(ae, row)
@@ -168,6 +170,4 @@ def infer_energy():
 
 if __name__ == '__main__':
     misc.gen_dirs([PLOT_DIR, MODEL_DIR])
-    # infer_stability()
-    infer_energy()
-
+    infer_stability() if TARGET=='limit' else infer_energy()

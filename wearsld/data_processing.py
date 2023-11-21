@@ -13,8 +13,11 @@ import pycwt
 import pywt
 from tqdm import tqdm
 
+from time import time as time_lib
+
 from config import (
     PROCESSED_DIR,
+    PLOT_DIR,
     TEST_SIZE,
     RANDOM_SEED,
     INPUT_SIZE,
@@ -25,43 +28,145 @@ from config import (
     N_EDGES,
     SENSOR,
     TARGET,
-    MACHINE_TOOL
+    MACHINE_TOOL,
+    TRANSFER,
+    BATCH_SIZE,
+    FONTSIZE
 )
 import matplotlib.pyplot as plt
 from scipy import signal
+from scipy.interpolate import interp1d
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from misc import gen_dirs
 
-from plot_utils import modify_axis
+from plot_utils import modify_axis, hist
 
 class DataProcessing:
     def __init__(self):
+        self.n_wz1 = 0
+        self.n_wz2 = 0
         # data = np.load(f'{PROCESSED_DIR}/{DATA_FNAME}')
-        self.data = self.load_energy(TARGET)
-        print(self.data.shape)
+        self.data = self.load_energy(TARGET, MACHINE_TOOL)
+
+        # print(self.data.shape)
         # self.data = self.load_stability()
         # self.process_hdf()
         # quit()
-        self.data = self.load_processed() # spsp, ae, wear, energy
+        # self.data = self.load_processed() # spsp, ae, wear, energy
 
         self.scaler = MinMaxScaler()
         # self.scaler = StandardScaler()
-        self.train, self.test = train_test_split(self.data, test_size=TEST_SIZE)
+        if TRANSFER:
+            # WZ3
+            # self.train = self.data[self.n_wz1+self.n_wz2:]
+            # self.test = self.data[:self.n_wz1+self.n_wz2]
+            # WZ1
+            # self.train = self.data[:self.n_wz1]
+            # self.test = self.data[self.n_wz1:]
+            # WZ2
+            self.train = self.data[self.n_wz1:self.n_wz1+self.n_wz2]
+            self.test = np.concatenate((self.data[:self.n_wz1], self.data[self.n_wz1+self.n_wz2:]))
+        else:
+            self.train, self.test = train_test_split(self.data, test_size=TEST_SIZE)
+            np.random.shuffle(self.train)
 
         self.train[:, :INPUT_SIZE] = self.scaler.fit_transform(self.train[:, :INPUT_SIZE])
         self.test[:, :INPUT_SIZE] = self.scaler.transform(self.test[:, :INPUT_SIZE])
 
-        np.random.shuffle(self.train)
-
     def get_train_test(self):
         return self.train, self.test
 
-    def get_data(self, target):
-        return self.load_energy(target)
+    def get_data(self, target, mt):
+        return self.load_energy(target, mt)
         # return self.load_stability()
+
+    def get_batches(self):
+        train = np.random.shuffle(self.train)
+        cutoff = (len(self.train) // BATCH_SIZE) * BATCH_SIZE
+        return np.reshape(self.train[:cutoff, :], (-1, BATCH_SIZE, self.train.shape[-1]))
 
     def get_scaler(self):
         return self.scaler
+
+    def validate(self, evaluate, epoch_idx, save_eval, verbose, save_suffix):
+        """Validation method"""
+        epoch_dir = f'{RESULTS_DIR}/train_epoch{epoch_idx:04}'
+        gen_dirs([epoch_dir])
+        total_errors = np.empty(len(self.test))
+
+        for idx, __ in enumerate(self.test):
+            inp = self.test[idx, :INPUT_SIZE]
+            out = self.test[idx, INPUT_SIZE]
+
+            pred_out, error = evaluate(inp, out)
+            total_errors[idx] = error
+
+
+        if verbose:
+            fig, axs = plt.subplots(1, 1, figsize=(6, 6))
+            fig.suptitle(f'MLP, Error: {np.mean(total_errors):.2f} +- {np.std(total_errors):.2f}')
+
+            spsp = np.arange(4000, 8001, 1)
+            test_wears = [2500 * idx for idx in range(0, 11)]
+
+            for test_wear in test_wears:
+                wear_data = np.array([test_wear for __ in spsp])
+                test_data = np.transpose([spsp, wear_data])
+
+                test_data = self.scaler.transform(test_data)
+                pred_out = evaluate(test_data, None)
+                # pred_out = np.array(
+                    # [
+                        # evaluate(
+                            # self.scaler.transform(
+                                # np.reshape([spsp_value, test_wear], (1, INPUT_SIZE))
+                            # ).flatten(),
+                            # None
+                        # )
+                        # for spsp_value in spsp
+                    # ]
+                # )
+
+                axs.plot(spsp, pred_out, label=f'{test_wear}')
+
+            sca = axs.scatter(self.data[:, 0], self.data[:, -1], c=self.data[:, 1], s=1.5)
+            plt.colorbar(sca)
+
+            axs.legend(
+                bbox_to_anchor=(0., 1.02, 1., .102),
+                loc='lower left',
+                ncol=3,
+                mode="expand",
+                fontsize=FONTSIZE,
+                borderaxespad=0.,
+                frameon=False
+            )
+
+            axs.set_ylabel(r'a$_e$ limit', fontsize=FONTSIZE)
+            axs.set_xlabel('Spindle speed', fontsize=FONTSIZE)
+            axs.set_xticks(np.arange(4000, 8001, 1000))
+            # axs.set_yticks(np.arange(0, 3.6, 0.5))
+            axs.set_yticks(np.arange(0, 7, 1))
+
+            fig.canvas.draw()
+
+            axs = modify_axis(axs, 'rpm', 'mm', -2, -2, FONTSIZE)
+
+            axs.set_xlim(4000, 8000)
+            # axs.set_ylim(0, 3.5)
+            axs.set_ylim(0, 6)
+            plt.tight_layout()
+
+            if save_eval:
+                plt.savefig(f'{PLOT_DIR}/mlp_epoch{epoch_idx}.png', dpi=600)
+            else:
+                plt.show()
+            plt.close()
+            # print(np.mean(total_errors))
+
+        return np.mean(total_errors), np.std(total_errors)
+
 
     def load_processed(self):
         # folders = sorted(
@@ -70,16 +175,32 @@ class DataProcessing:
         # )
         # results = np.concatenate([np.load(f'{RESULTS_DIR}/{folder}.npy') for folder in folders])
         # results = results[np.where(results[:, -1] < 0.00001)]
-        results = np.load(f'{PROCESSED_DIR}/energy_wave_corrected.npy') # spsp, ae, wear, energy
+        results = np.load(f'{PROCESSED_DIR}/energy_wave_{MACHINE_TOOL}dmu.npy') # spsp, ae, wear, energy
         scaler = MinMaxScaler()
         results = results[np.where(results[:, 1] <= 4)]
         results[:, -1] = scaler.fit_transform(results[:, -1].reshape((-1, 1))).flatten()
-        # results = results[np.where(results[:, 3] <= 0.4)]
-        # print(results.shape)
-        # hist(results[:, 3])
-        # plt.scatter(results[:, 0], results[:, 1], c=results[:, -1])
-        # plt.show()
-        # quit()
+
+        print(results.shape)
+
+        results = results[np.where(results[:, 3] <= 0.3)]
+        scaler = MinMaxScaler()
+        results[:, -1] = scaler.fit_transform(results[:, -1].reshape((-1, 1))).flatten()
+        print(results.shape)
+        hist(results[:, 2])
+        plt.scatter(results[:, 0], results[:, 1], c=results[:, -1])
+        # fig = plt.figure()
+        # ax3d = fig.add_subplot(projection='3d')
+        # ax3d.scatter(
+            # results[:, 0],
+            # results[:, 2],
+            # results[:, 1],
+            # c=results[:, -1],
+            # s=2
+            # # vmin=0,
+            # # vmax=0.0001
+        # )
+        plt.show()
+        quit()
         return results
 
     def calc_limit(self, series, aes):
@@ -102,21 +223,23 @@ class DataProcessing:
             ])
             return results
 
-    def load_energy(self, target):
-        fname = 'altedmu_energy_22' if MACHINE_TOOL=='old' else 'neuedmu_energy_22'
-        with h5py.File(f'{DATA_DIR}/{fname}.hdf5', 'r') as fhandle:
+    def load_energy(self, target, mt):
+        fname = 'altedmu_energy_2' if mt=='old' else 'neuedmu_energy_2'
+        with h5py.File(f'data/01_raw/{mt}_dmu/{fname}.hdf5', 'r') as fhandle:
             results = []
-            for tool in fhandle:
+            for i_tool, tool in enumerate(fhandle):
                 exps = fhandle[tool]
                 for exp in exps:
                     data = fhandle[f'{tool}/{exp}/energy_{SENSOR}'][()]
-                    wear = fhandle[f'{tool}/{exp}/wear'][:, 1]
+                    # wear = fhandle[f'{tool}/{exp}/wear'][:, 1]
                     start_wear = fhandle[f'{tool}/{exp}'].attrs['wear']
                     energy = data[:, 1]
                     aes = data[:, 0]
                     spsp = fhandle[f'{tool}/{exp}'].attrs['spsp']
-                    # wear = fhandle[f'{tool}/{exp}'].attrs['wear']
+                    wear_end = fhandle[f'{tool}/{exp}'].attrs['wear_end']
                     ae_max = fhandle[f'{tool}/{exp}'].attrs['ae_max']
+
+                    wear = np.linspace(start_wear, wear_end, len(aes))
 
                     lim = fhandle[f'{tool}/{exp}/energy_{SENSOR}'].attrs['ae_lim']
                     # if lim==-1: lim = ae_max
@@ -124,11 +247,21 @@ class DataProcessing:
                     if target=='energy':
                         for idx, ae in enumerate(aes):
                             results.append([spsp, ae, wear[idx], energy[idx]])
-                    elif target=='limit':
+                            if i_tool==0:
+                                self.n_wz1 += 1
+                            elif i_tool==1:
+                                self.n_wz2 += 1
+
+                    elif target=='limit' and lim!=-1:
                         results.append([spsp, start_wear, lim])
+                        if i_tool==0:
+                            self.n_wz1 += 1
+                        elif i_tool==1:
+                            self.n_wz2 += 1
+
             results = np.array(results)
-            if target=='limit':
-                results = results[np.where(results[:, -1]!=-1)]
+            # if target=='limit':
+                # results = results[np.where(results[:, -1]!=-1)]
             # np.save(f'{RESULTS_DIR}/energy_acc.npy', results)
 
             # hist(results[:, -1], nb_bins=200)
@@ -154,23 +287,27 @@ class DataProcessing:
     def process_hdf(self):
         results = []
         # with h5py.File(f'{DATA_DIR}/altedmu.hdf5', 'r') as fhandle:
-        results = np.load(f'{PROCESSED_DIR}/energy_wave.npy')
-        with h5py.File(f'{DATA_DIR}/altedmu_audio_filtered.hdf5', 'r') as fhandle:
+        # results = np.load(f'{PROCESSED_DIR}/energy_wave.npy')
+        audiofile = 'altedmu_audio_filtered.hdf5' if MACHINE_TOOL=='old' else 'neuedmu_audio_filtered.hdf5'
+        with h5py.File(f'{DATA_DIR}/{audiofile}', 'r') as fhandle:
             res_i = 0
             for tool in fhandle:
                 # tool = 'WZ9'
                 exps = fhandle[tool]
                 for exp in tqdm(exps):
-                    energy_file = h5py.File(f'{DATA_DIR}/altedmu_energy_22.hdf5', 'r')
+                    energyfile = 'altedmu_energy_2.hdf5' if MACHINE_TOOL=='old' else 'neuedmu_energy_2.hdf5'
+                    energy = h5py.File(f'{DATA_DIR}/{energyfile}', 'r')
 
                     data = fhandle[f'{tool}/{exp}/audio_filtered'][()]
                     fs = fhandle[f'{tool}/{exp}/audio_filtered'].attrs['sampling_rate']
                     # data = fhandle[f'{tool}/{exp}/audio'][()]
                     # fs = fhandle[f'{tool}/{exp}/audio'].attrs['sampling_rate']
                     spsp = fhandle[f'{tool}/{exp}'].attrs['spsp']
-                    # wear = fhandle[f'{tool}/{exp}'].attrs['wear']
-                    wear_start = energy_file[f'{tool}/{exp}'].attrs['wear']
-                    wear_end = energy_file[f'{tool}/{exp}'].attrs['wear_end']
+                    wear = energy[f'{tool}/{exp}/wear'][()]
+                    ae_wear = wear[:, 0]
+                    wear = wear[:, 1]
+                    # wear_start = energy_file[f'{tool}/{exp}'].attrs['wear']
+                    # wear_end = energy_file[f'{tool}/{exp}'].attrs['wear_end']
                     # istart = fhandle[f'{tool}/{exp}'].attrs['i_rampe_start']
                     # iend = fhandle[f'{tool}/{exp}'].attrs['i_rampe_end']
                     vf = fhandle[f'{tool}/{exp}'].attrs['vf']
@@ -209,6 +346,9 @@ class DataProcessing:
                     dt = 1 / fs
 
                     data = (data - np.mean(data)) / np.std(data)
+                    # sampling frequency is insane for new dmu
+                    if MACHINE_TOOL=='new':
+                        data = signal.decimate(data, 3)
 
                     # valid_portion = lambda ae: (
                         # (6 * ae + 1225) - np.sqrt(-ae * (1189*ae - 14700))
@@ -219,13 +359,14 @@ class DataProcessing:
 
                     time = np.array([1 / fs * idx for idx, __ in enumerate(data)])
 
-
                     # Use wavelets for high frequency resolution
                     wavelet = 'morl' # Known to be beneficial for audio data
                     freqs = np.arange(1000, 6000, 1)
                     # fz_freq = spsp / 60.0 * N_EDGES
                     scale = pywt.frequency2scale(wavelet, freqs / fs)
+
                     cwtmatr, __ = pywt.cwt(data, scale, wavelet, sampling_period=dt)
+
                     # power = np.power(np.abs(cwtmatr), 2)
                     power = np.abs(cwtmatr) # Only use abs for now to avoid high fluctuations
 
@@ -263,10 +404,12 @@ class DataProcessing:
                     energy_filtered = np.sum(power_downsampled[freq_cond], axis=0)
 
                     energy = signal.savgol_filter(energy, len(energy)//10, 3)
-                    energy_filtered = signal.savgol_filter(energy_filtered, len(energy)//10, 3)
+                    energy_filtered = signal.savgol_filter(energy_filtered, len(energy_filtered)//10, 3)
 
-                    aes_wave = np.linspace(0, ae, len(energy))
-                    wear_wave = np.linspace(wear_start, wear_end, len(energy))
+                    aes_wave = np.linspace(0, ae, len(energy_filtered))
+                    # wear_wave = np.linspace(wear_start, wear_end, len(energy))
+                    f_interp = interp1d(ae_wear, wear, fill_value='extrapolate')
+                    wear_wave = f_interp(aes_wave)
                     # aes_wave = np.linspace(0, ae * valid_portion(ae), len(energy))
                     for e_idx, __ in enumerate(energy_filtered):
                         results.append([spsp, aes_wave[e_idx], wear_wave[e_idx], energy_filtered[e_idx]])
@@ -389,7 +532,7 @@ class DataProcessing:
         # res_ax.scatter(results[:, 0], results[:, 2], c=results[:, 1])
         # plt.show()
         # plt.close()
-        np.save(f'{PROCESSED_DIR}/energy_wave_corrected.npy', results)
+        np.save(f'{PROCESSED_DIR}/energy_wave_{MACHINE_TOOL}dmu.npy', results)
 
     def process_raw(self):
         np.set_printoptions(suppress=True)
