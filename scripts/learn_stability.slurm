@@ -1,11 +1,10 @@
 #!/bin/bash -l
 
-#SBATCH --time=08:00:00
-#SBATCH -N 1 -c 20
-#SBATCH --partition=med
-#SBATCH --constraint=cstd02
+#SBATCH --time=02:00:00
+#SBATCH -N 1 -c 40
+#SBATCH --partition=ext_chem_norm
 
-#SBATCH --mem=52G
+#SBATCH --mem=82G
 
 #SBATCH --mail-user=felix.finkeldey@tu-dortmund.de
 #SBATCH --mail-type=ALL

@@ -37,10 +37,6 @@ MODEL_DIR = f'models/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_oldwear-intpl'
 PLOT_DIR = f'plots/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_oldwear-intpl'
 RESULTS_DIR = f'results/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_oldwear-intpl'
 
-# MODEL_DIR = f'models/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_newenergy-doublecropped'
-# PLOT_DIR = f'plots/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_newenergy-doublecropped'
-# RESULTS_DIR = f'results/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_newenergy-doublecropped'
-
 DATA_RANGES = [
     np.concatenate((np.arange(101, 132), np.arange(201, 256), np.arange(301, 337))), # WZ4
     np.concatenate((np.arange(101, 169), np.arange(201, 235))), # WZ5
