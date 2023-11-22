@@ -10,7 +10,7 @@
 #SBATCH --mail-type=ALL
 #SBATCH -o /work/smfefink/wear-sld/out.txt
 cd /work/smfefink/wear-sld
-export PYTHONPATH=$PYTHONPATH:/work/smfefink/pylib
+export PYTHONPATH=$PYTHONPATH:/work/smfefink/pylib:/work/smfefink/pytorch-utils
 
 module purge
 module load python/3.9.10-wip
@@ -18,5 +18,5 @@ echo "sbatch: START SLURM_JOB_ID $SLURM_JOB_ID (SLURM_TASK_PID $SLURM_TASK_PID) 
 echo "sbatch: SLURM_JOB_NODELIST $SLURM_JOB_NODELIST"
 echo "sbatch: SLURM_JOB_ACCOUNT $SLURM_JOB_ACCOUNT"
 pip3 install -r requirements.txt
-python3 scripts/learn_stability.py
+python3 scripts/transfer.py
 

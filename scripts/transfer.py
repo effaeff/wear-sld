@@ -60,7 +60,7 @@ def main():
     train_new[:, :INPUT_SIZE] = scaler_new.fit_transform(train_new[:, :INPUT_SIZE])
     test_new[:, :INPUT_SIZE] = scaler_new.fit_transform(test_new[:, :INPUT_SIZE])
 
-    hyperopts = load_estimators(f'models/new_dmu_limit_audio')
+    hyperopts = load_estimators(f'models/new_dmu_energy_audio_oldwear-intpl')
     for hyper_idx, hyperopt in enumerate(hyperopts):
 
         # Train estimator using all data of new dmu with hyperparameters of best estimator
@@ -72,9 +72,11 @@ def main():
         estimator.set_params(**params)
 
         estimator.fit(train_new[:, :INPUT_SIZE], train_new[:, INPUT_SIZE])
+        print("Estimator fitted")
 
         # Iteratively post-train estimator using more and more experiments of old dmu
-        for i_exp in tqdm(range(10, len(train_old))):
+        # for i_exp in tqdm(range(10, len(train_old))):
+        for i_exp in range(19543, 19544):
             data_old_avail = train_old[:i_exp, :]
 
             trans_est = clone(estimator)
@@ -85,6 +87,7 @@ def main():
                 random_state=RANDOM_SEED,
                 n_iter=50
             )
+            print("Transfer complete")
             if not sys.warnoptions:
                 warnings.simplefilter("ignore")
                 os.environ["PYTHONWARNINGS"] = "ignore" # Also affect subprocesses
@@ -106,57 +109,58 @@ def main():
                 ]
             ) * 100.0
 
-            fig, axs = plt.subplots(1, 1, figsize=(6, 6))
-            fig.suptitle(f'{hyperopt[0].best_estimator_.__class__.__name__}: {err:.2f} +- {var:.2f}')
-
-            spsp = np.arange(4000, 8001, 1)
-
-            test_wears = [2500 * idx for idx in range(0, 11)]
-
-            for test_wear in test_wears:
-                wear_data = np.array([test_wear for __ in spsp])
-                test_data = np.transpose([spsp, wear_data])
-
-                test_data = scaler_old.transform(test_data)
-
-                pred = grid.predict(test_data) #- pred_0
-                # pred = trans_est.predict(test_data) #- pred_0
-
-                axs.plot(spsp, pred, label=f'{test_wear}')
-
-            sca = axs.scatter(data_old[:, 0], data_old[:, -1], c=data_old[:, 1], s=1.5)
-            plt.colorbar(sca)
-
-            axs.legend(
-                bbox_to_anchor=(0., 1.02, 1., .102),
-                loc='lower left',
-                ncol=3,
-                mode="expand",
-                fontsize=FONTSIZE,
-                borderaxespad=0.,
-                frameon=False
-            )
-
-            axs.set_ylabel(r'a$_e$ limit', fontsize=FONTSIZE)
-            axs.set_xlabel('Spindle speed', fontsize=FONTSIZE)
-            axs.set_xticks(np.arange(4000, 8001, 1000))
-            # axs.set_yticks(np.arange(0, 3.6, 0.5))
-            axs.set_yticks(np.arange(0, 6, 1))
-
-            fig.canvas.draw()
-
-            axs = modify_axis(axs, 'rpm', 'mm', -2, -2, FONTSIZE)
-
-            axs.set_xlim(4000, 8000)
-            axs.set_ylim(0, 5)
-            plt.tight_layout()
-
-            # plt.show()
-            plt.savefig(
-                f'{PLOT_DIR}/{hyperopt[0].best_estimator_.__class__.__name__}_trans{i_exp:03d}.png',
-                dpi=600
-            )
-            plt.close()
+            if TARGET=='limit':
+                fig, axs = plt.subplots(1, 1, figsize=(6, 6))
+                fig.suptitle(f'{hyperopt[0].best_estimator_.__class__.__name__}: {err:.2f} +- {var:.2f}')
+    
+                spsp = np.arange(4000, 8001, 1)
+    
+                test_wears = [2500 * idx for idx in range(0, 11)]
+    
+                for test_wear in test_wears:
+                    wear_data = np.array([test_wear for __ in spsp])
+                    test_data = np.transpose([spsp, wear_data])
+    
+                    test_data = scaler_old.transform(test_data)
+    
+                    pred = grid.predict(test_data) #- pred_0
+                    # pred = trans_est.predict(test_data) #- pred_0
+    
+                    axs.plot(spsp, pred, label=f'{test_wear}')
+    
+                sca = axs.scatter(data_old[:, 0], data_old[:, -1], c=data_old[:, 1], s=1.5)
+                plt.colorbar(sca)
+    
+                axs.legend(
+                    bbox_to_anchor=(0., 1.02, 1., .102),
+                    loc='lower left',
+                    ncol=3,
+                    mode="expand",
+                    fontsize=FONTSIZE,
+                    borderaxespad=0.,
+                    frameon=False
+                )
+    
+                axs.set_ylabel(r'a$_e$ limit', fontsize=FONTSIZE)
+                axs.set_xlabel('Spindle speed', fontsize=FONTSIZE)
+                axs.set_xticks(np.arange(4000, 8001, 1000))
+                # axs.set_yticks(np.arange(0, 3.6, 0.5))
+                axs.set_yticks(np.arange(0, 6, 1))
+    
+                fig.canvas.draw()
+    
+                axs = modify_axis(axs, 'rpm', 'mm', -2, -2, FONTSIZE)
+    
+                axs.set_xlim(4000, 8000)
+                axs.set_ylim(0, 5)
+                plt.tight_layout()
+    
+                # plt.show()
+                plt.savefig(
+                    f'{PLOT_DIR}/{hyperopt[0].best_estimator_.__class__.__name__}_trans{i_exp:03d}.png',
+                    dpi=600
+                )
+                plt.close()
 
 if __name__ == '__main__':
     main()

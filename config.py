@@ -22,20 +22,20 @@ FZ = 0.08
 N_EDGES = 4
 
 TEST_SIZE = 0.2
-TRANSFER = False
+TRANSFER = True
 
-# MACHINE_TOOL = 'old'
-MACHINE_TOOL = 'new'
+MACHINE_TOOL = 'old'
+# MACHINE_TOOL = 'new'
 DATA_DIR = f'data/01_raw/{MACHINE_TOOL}_dmu'
 PROCESSED_DIR = 'data/02_processed'
 
-# MODEL_DIR = f'models/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_transfer-wz2'
-# PLOT_DIR = f'plots/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_transfer-wz2'
-# RESULTS_DIR = f'results/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_transfer-wz2'
+MODEL_DIR = f'models/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_transfer-wz2_173'
+PLOT_DIR = f'plots/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_transfer-wz2_173'
+RESULTS_DIR = f'results/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_transfer-wz2_173'
 
-MODEL_DIR = f'models/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_oldwear-intpl'
-PLOT_DIR = f'plots/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_oldwear-intpl'
-RESULTS_DIR = f'results/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_oldwear-intpl'
+# MODEL_DIR = f'models/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_oldwear-intpl'
+# PLOT_DIR = f'plots/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_oldwear-intpl'
+# RESULTS_DIR = f'results/{MACHINE_TOOL}_dmu_{TARGET}_{SENSOR}_oldwear-intpl'
 
 DATA_RANGES = [
     np.concatenate((np.arange(101, 132), np.arange(201, 256), np.arange(301, 337))), # WZ4
@@ -46,7 +46,7 @@ DATA_RANGES = [
 RANDOM_SEED = 1234
 
 CV_FOLDS = 10
-N_ITER_SEARCH = 300
+N_ITER_SEARCH = 100
 
 BATCH_SIZE = 4
 
@@ -75,14 +75,14 @@ PARAM_DICTS = [
         'min_samples_split': randint(2, 11),
         'min_samples_leaf': randint(2, 11),
         'max_features': randint(1, INPUT_SIZE)
-    },
-    {
-        'n_estimators': randint(100, 1000),
-        'max_depth': randint(2, 32),
-        'min_samples_split': randint(2, 11),
-        'min_samples_leaf': randint(2, 11),
-        'max_features': randint(1, INPUT_SIZE)
-    },
+    }
+    # {
+    #     'n_estimators': randint(100, 1000),
+    #     'max_depth': randint(2, 32),
+    #     'min_samples_split': randint(2, 11),
+    #     'min_samples_leaf': randint(2, 11),
+    #     'max_features': randint(1, INPUT_SIZE)
+    # },
     # {
         # 'learning_rate_init': uniform(0.0001, 0.01),
         # 'alpha': uniform(0.0001, 0.05),
@@ -94,8 +94,8 @@ PARAM_DICTS = [
 REGRESSORS = [
     # [xgb.XGBRegressor(objective='reg:squarederror') for __ in range(OUTPUT_SIZE)],
     # [AdaBoostRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)],
-    [GradientBoostingRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)],
-    [RandomForestRegressor(random_state=RANDOM_SEED, n_jobs=-1) for __ in range(OUTPUT_SIZE)]
+    [GradientBoostingRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)]
+    # [RandomForestRegressor(random_state=RANDOM_SEED, n_jobs=-1) for __ in range(OUTPUT_SIZE)]
     # [MLPRegressor(random_state=RANDOM_SEED) for __ in range(OUTPUT_SIZE)]
 ]
 
